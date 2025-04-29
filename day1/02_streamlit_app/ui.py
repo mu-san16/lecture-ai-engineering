@@ -11,51 +11,48 @@ from metrics import get_metrics_descriptions
 def display_chat_page(pipe):
     """チャットページのUIを表示する"""
     st.subheader("質問を入力してください")
-    user_question = st.text_area("質問", key="question_input", height=100, value=st.session_state.get("current_question", ""))
-    submit_button = st.button("質問を送信")
-
-    # セッション状態の初期化（安全のため）
-    if "current_question" not in st.session_state:
-        st.session_state.current_question = ""
-    if "current_answer" not in st.session_state:
-        st.session_state.current_answer = ""
-    if "response_time" not in st.session_state:
-        st.session_state.response_time = 0.0
-    if "feedback_given" not in st.session_state:
-        st.session_state.feedback_given = False
-
-    # 質問が送信された場合
-    if submit_button and user_question:
+    
+    # チャット履歴の初期化
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+    
+    # 過去のメッセージを表示
+    for message in st.session_state.messages:
+        if message["role"] == "user":
+            with st.chat_message("user", avatar="👤"):
+                st.markdown(message["content"])
+        else:
+            with st.chat_message("assistant", avatar="🤖"):
+                st.markdown(message["content"])
+    
+    # ユーザー入力
+    user_question = st.chat_input("質問を入力してください...")
+    
+    if user_question:
+        # ユーザーメッセージを表示
+        with st.chat_message("user", avatar="👤"):
+            st.markdown(user_question)
+        
+        # セッション状態を更新
         st.session_state.current_question = user_question
-        st.session_state.current_answer = "" # 回答をリセット
-        st.session_state.feedback_given = False # フィードバック状態もリセット
-
-        with st.spinner("モデルが回答を生成中..."):
-            answer, response_time = generate_response(pipe, user_question)
-            st.session_state.current_answer = answer
-            st.session_state.response_time = response_time
-            # ここでrerunすると回答とフィードバックが一度に表示される
-            st.rerun()
-
-    # 回答が表示されるべきか判断 (質問があり、回答が生成済みで、まだフィードバックされていない)
-    if st.session_state.current_question and st.session_state.current_answer:
-        st.subheader("回答:")
-        st.markdown(st.session_state.current_answer) # Markdownで表示
-        st.info(f"応答時間: {st.session_state.response_time:.2f}秒")
-
-        # フィードバックフォームを表示 (まだフィードバックされていない場合)
+        st.session_state.messages.append({"role": "user", "content": user_question})
+        
+        # AIの回答を生成
+        with st.chat_message("assistant", avatar="🤖"):
+            with st.spinner("回答を生成中..."):
+                answer, response_time = generate_response(pipe, user_question)
+                st.markdown(answer)
+                st.info(f"応答時間: {response_time:.2f}秒")
+        
+        # セッション状態を更新
+        st.session_state.current_answer = answer
+        st.session_state.response_time = response_time
+        st.session_state.messages.append({"role": "assistant", "content": answer})
+        st.session_state.feedback_given = False
+        
+        # フィードバックフォームの表示（引数なしで呼び出し）
         if not st.session_state.feedback_given:
             display_feedback_form()
-        else:
-             # フィードバック送信済みの場合、次の質問を促すか、リセットする
-             if st.button("次の質問へ"):
-                  # 状態をリセット
-                  st.session_state.current_question = ""
-                  st.session_state.current_answer = ""
-                  st.session_state.response_time = 0.0
-                  st.session_state.feedback_given = False
-                  st.rerun() # 画面をクリア
-
 
 def display_feedback_form():
     """フィードバック入力フォームを表示する"""
@@ -74,6 +71,11 @@ def display_feedback_form():
             combined_feedback = f"{feedback}"
             if feedback_comment:
                 combined_feedback += f": {feedback_comment}"
+
+            # user_questionとanswerが引数として渡されている場合と渡されていない場合の場合わけ
+            question = user_question if user_question is not None else st.session_state.current_question
+            ans = answer if answer is not None else st.session_state.current_answer
+            resp_time = response_time if response_time is not None else st.session_state.response_time
 
             save_to_db(
                 st.session_state.current_question,
