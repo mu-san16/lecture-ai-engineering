@@ -171,3 +171,29 @@ def test_model_reproducibility(sample_data, preprocessor):
     assert np.array_equal(
         predictions1, predictions2
     ), "モデルの予測結果に再現性がありません"
+
+def test_model_inference_time(train_model):
+    """モデルの推論時間を検証"""
+    model, X_test, _ = train_model
+
+    # 複数回実行して平均を取る（より安定した測定）
+    num_runs = 5
+    times = []
+    
+    for _ in range(num_runs):
+        start_time = time.time()
+        model.predict(X_test)
+        end_time = time.time()
+        times.append(end_time - start_time)
+    
+    avg_inference_time = sum(times) / len(times)
+    max_inference_time = max(times)
+    
+    print(f"平均推論時間: {avg_inference_time:.4f}秒")
+    print(f"最大推論時間: {max_inference_time:.4f}秒")
+    print(f"全実行時間: {times}")
+
+    # 元の閾値は維持しつつ、より詳細な情報を提供
+    assert avg_inference_time < 1.0, f"平均推論時間が長すぎます: {avg_inference_time:.4f}秒"
+    # 最大実行時間にも制約を追加
+    assert max_inference_time < 1.2, f"最大推論時間が長すぎます: {max_inference_time:.4f}秒"
